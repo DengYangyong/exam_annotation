@@ -57,6 +57,10 @@ flags.DEFINE_string(
     "output_dir", None,
     "The output directory where the model checkpoints will be written.")
 
+flags.DEFINE_string(
+    "export_model_dir", None,
+    "The output directory where the export model checkpoints will be written.")
+
 ## Other parameters
 
 flags.DEFINE_string(
@@ -799,6 +803,22 @@ def main(_):
             drop_remainder=predict_drop_remainder)
 
         result = estimator.predict(input_fn=predict_input_fn)
+
+        """=========================EXPORT MODEL========================"""
+
+        def serving_input_receiver_fn():
+            """An input receiver that expects a serialized tf.Example."""
+            reciever_tensors = {"input_ids": tf.placeholder(dtype=tf.int64,shape=[1, FLAGS.max_seq_length])}
+            features = {"input_ids": reciever_tensors['input_ids'],
+                        "input_mask": 1 - tf.cast(tf.equal(reciever_tensors['input_ids'], 0), dtype=tf.int64),
+                        "segment_ids": tf.zeros(dtype=tf.int64,shape=[1, FLAGS.max_seq_length]),
+                        "label_ids": tf.zeros(dtype=tf.int64, shape=[1, label_length])
+                                                                                                }
+            return tf.estimator.export.ServingInputReceiver(features, reciever_tensors)
+
+        estimator._export_to_tpu = False
+        estimator.export_savedmodel(FLAGS.export_model_dir, serving_input_receiver_fn)
+        """=========================EXPORT MODEL========================"""
 
         output_predict_file = os.path.join(FLAGS.output_dir, "predicted_label.txt")
         with tf.gfile.GFile(output_predict_file, "w") as writer:
